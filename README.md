@@ -1,2 +1,80 @@
-# FastAPI_Section
+# SPIMEX Bulletin Async Parser
 
+Парсер бюллетеней Санкт-Петербургской международной товарно-сырьевой биржи (СПбМТСБ).  
+Проект автоматически скачивает XLS-файлы, извлекает таблицу *«Единица измерения: Метрическая тонна»*, конвертирует данные в структурированный формат и сохраняет их в PostgreSQL.
+
+---
+
+## 📌 Возможности
+
+- Асинхронная загрузка бюллетеней с сайта биржи.
+- Парсинг XLS (двухуровневых заголовков).
+- Сохранение данных в PostgreSQL.
+
+---
+
+## 📦 Требования
+
+- Python 3.12
+- PostgreSQL 17 (либо Docker)
+- pip / venv
+
+---
+
+# 🚀 Установка и запуск
+
+## 1. Создать виртуальное окружение
+
+```bash
+python -m venv venv
+```
+
+### Активировать:
+- Windows
+```bash
+source venv\Scripts\activate
+```
+- Linux / macOS
+```bash
+source venv/bin/activate
+```
+
+## 2. Установка зависимостей
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+# Поднитие контейнера БД PostgreSQL в Docker
+
+## 1. Создать файл .env в корне проекта.
+
+Пример содержания файла .env находится в корне проекта в файле .env.example.
+
+## 2. Из корневой директории проекта выполнить команду:
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
+## 3. После этого выполнить миграции Alembic
+```bash
+alembic revision --autogenerate -m "Initial commit"
+alembic upgrade head
+```
+
+---
+# Запуск проекта
+
+Основной вход — main.py:
+```bash
+python main.py
+```
+---
+# Логирование
+
+Все события пишутся в:
+```
+logs/app.log
+```
