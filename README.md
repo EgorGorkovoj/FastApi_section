@@ -61,7 +61,7 @@ pip install -r requirements.txt
 
 ---
 
-# Поднятие контейнера приложения, БД PostgreSQL и REDIC в Docker
+# Поднятие контейнера приложения, БД PostgreSQL и REDIS в Docker
 
 ## 1. Создать файл .env в корне проекта.
 
