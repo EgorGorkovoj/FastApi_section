@@ -1,8 +1,9 @@
+import datetime
 from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR: Path = Path(__file__).parent.parent
@@ -31,6 +32,9 @@ class Config(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: str
     CACHE_RESET_TIME: str = '14:11'
+
+    RUN_PARSER_ON_STARTUP: bool = True
+    DEFAULT_START_DATE: datetime.date = datetime.date(2023, 1, 1)
 
     @property
     def cache_reset_time_obj(self) -> time:

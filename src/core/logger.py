@@ -1,5 +1,5 @@
-import time
 import logging
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -29,7 +29,7 @@ logger.addHandler(file_handler)
 
 
 class LoggingMiddleware:
-    """Class for logging all requests as middleware"""
+    """Класс для логирования всех запросов в виде middleware"""
 
     async def __call__(self, request: Request, call_next, *args, **kwargs):
         start_time = time.time()

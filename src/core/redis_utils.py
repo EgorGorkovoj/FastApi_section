@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 
+import redis.asyncio as redis
 from fastapi import Request
 from fastapi_cache import FastAPICache
-import redis.asyncio as redis
 
 from core.config import settings
 from core.logger import logger
@@ -34,7 +34,7 @@ async def connect_redis() -> redis.Redis:
         raise
 
 
-async def disconect_redis(redis_client: redis.Redis) -> None:
+async def disconnect_redis(redis_client: redis.Redis) -> None:
     """
     Закрывает соединение с Redis.
 
