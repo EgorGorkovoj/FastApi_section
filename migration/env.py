@@ -1,3 +1,10 @@
+# flake8: noqa: E402
+
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
 import asyncio
 from logging.config import fileConfig
 
@@ -6,8 +13,8 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from parser_bulletin.core.config import settings
-from parser_bulletin.model import Base
+from src.core.config import settings
+from src.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
