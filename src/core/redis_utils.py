@@ -3,95 +3,159 @@ from datetime import datetime, timedelta
 import redis.asyncio as redis
 from fastapi import Request
 from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
 
-from core.config import settings
+from core.config import Config, settings
 from core.logger import logger
 
 
-async def connect_redis() -> redis.Redis:
-    """
-    Инициализирует и возвращает подключение к Redis.
+class RedisManager:
+    def __init__(self, settings: Config):
+        self._settings = settings
+        self._client: redis.Redis | None = None
 
-    Возвращает:
-        redis.Redis: Асинхронный клиент Redis.
+    async def connect(self) -> redis.Redis:
+        """
+        Инициализирует и возвращает подключение к Redis.
 
-    Исключения:
-        Любое исключение при подключении пробрасывается дальше.
-    """
+        Возвращает:
+            redis.Redis: Асинхронный клиент Redis.
 
-    redis_client = redis.Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=0,
-        decode_responses=True,
-    )
-    try:
-        await redis_client.ping()
-        logger.info('Успешное подключение к Redis!')
-        return redis_client
-    except Exception as e:
-        logger.warning(f'Не удалось подключиться к Redis: {e}')
-        raise
+        Исключения:
+            Любое исключение при подключении пробрасывается дальше.
+        """
+        if self._client:
+            return self._client
 
+        self._client = redis.Redis(
+            host=self._settings.REDIS_HOST,
+            port=self._settings.REDIS_PORT,
+            db=0,
+            decode_responses=True,
+        )
 
-async def disconnect_redis(redis_client: redis.Redis) -> None:
-    """
-    Закрывает соединение с Redis.
+        try:
+            await self._client.ping()
+            logger.info('Успешное подключение к Redis!')
+            return self._client
+        except Exception as e:
+            logger.warning(f'Не удалось подключиться к Redis: {e}')
+            raise
 
-    Аргументы:
-        redis_client (redis.Redis): Клиент Redis.
-    """
-    if redis_client:
-        await redis_client.close()
-        logger.info('Отключено от Redis.')
-
-
-def calculate_ttl_until() -> int:
-    """
-    Вычисляет TTL (Time to Life) в секундах до указанного времени сегодня.
-    Если текущее время уже прошло, TTL считается до этого времени завтра.
-
-    Аргументы:
-        target_time (time): Время, до которого считается TTL.
-
-    Возвращает:
-        int: Количество секунд.
-    """
-
-    now = datetime.now()
-    target = datetime.combine(now.date(), settings.cache_reset_time_obj)
-
-    if now >= target:
-        target = target + timedelta(days=1)
-
-    delta = target - now
-    return int(delta.total_seconds())
+    async def disconnect_redis(self) -> None:
+        """
+        Закрывает соединение с Redis.
+        """
+        if self._client:
+            await self._client.close()
+            logger.info('Отключено от Redis.')
+            self._client = None
 
 
-def build_cache_key_from_query(
-    func,
-    namespace: str = '',
-    request: Request | None = None,
-    *args,
-    **kwargs,
-) -> str:
-    """
-    Формирует ключ кэша на основе query-параметров запроса.
+class RedisCacheManager:
+    def __init__(self, redis: RedisManager, settings: Config):
+        self._redis = redis
+        self._settings = settings
 
-    Аргументы:
-        func (Callable): Функция, для которой строится ключ.
-        namespace (str): Пространство имён для ключа.
-        request (Request | None): FastAPI запрос, откуда берутся query-параметры.
+    async def init_cache(self) -> None:
+        try:
+            redis_client = await self._redis.connect()
+            FastAPICache.init(
+                RedisBackend(redis_client),
+                prefix='fastapi-cache',
+            )
+            logger.info('FastAPI-Cache успешно инициализирован!')
+        except Exception as e:
+            logger.error(f'Не удалось инициализировать FastAPI-Cache: {e}')
+            raise
 
-    Возвращает:
-        str: Сформированный ключ кэша.
-    """
+    def calculate_ttl_until_reset(self) -> int:
+        """
+        Вычисляет TTL (Time to Life) в секундах до указанного времени сегодня.
+        Если текущее время уже прошло, TTL считается до этого времени завтра.
 
-    prefix = FastAPICache.get_prefix()
+        Аргументы:
+            target_time (time): Время, до которого считается TTL.
 
-    if not request:
-        return f'{prefix}:{namespace}'
+        Возвращает:
+            int: Количество секунд.
+        """
 
-    query = sorted(request.query_params.items())
-    query_str = ':'.join(v for _, v in query)
-    return f'{prefix}:{namespace}:{query_str}'
+        now = datetime.now()
+        target = datetime.combine(
+            now.date(),
+            self._settings.cache_reset_time_obj,
+        )
+
+        if now >= target:
+            target += timedelta(days=1)
+
+        return int((target - now).total_seconds())
+
+    def build_key_from_request(
+        self,
+        func,
+        namespace: str = '',
+        request: Request | None = None,
+        *args,
+        **kwargs,
+    ) -> str:
+        """
+        Формирует ключ кэша на основе query-параметров запроса.
+
+        Аргументы:
+            func (Callable): Функция, для которой строится ключ.
+            namespace (str): Пространство имён для ключа.
+            request (Request | None): FastAPI запрос, откуда берутся query-параметры.
+
+        Возвращает:
+            str: Сформированный ключ кэша.
+        """
+
+        prefix = FastAPICache.get_prefix()
+
+        if not request:
+            return f'{prefix}:{namespace}'
+
+        query = sorted(request.query_params.items())
+        query_str = ':'.join(v for _, v in query)
+        return f'{prefix}:{namespace}:{query_str}'
+
+
+class RedisFabric:
+    def __init__(self, settings: Config):
+        self._settings = settings
+
+    def create_redis(self) -> RedisManager:
+        return RedisManager(self._settings)
+
+
+class CacheFabric:
+    def __init__(self, settings: Config, redis_manager: RedisManager):
+        self._settings = settings
+        self._redis_manager = redis_manager
+
+    def create_redis_cache(self) -> RedisCacheManager:
+        return RedisCacheManager(self._redis_manager, self._settings)
+
+
+class RedisCacheFactory:
+    """Создаёт RedisManager и RedisCacheManager для приложения."""
+
+    def __init__(self, settings: Config):
+        self._settings = settings
+        self._redis_manager: RedisManager | None = None
+        self._cache_manager: RedisCacheManager | None = None
+
+    def create_redis(self) -> RedisManager:
+        if not self._redis_manager:
+            self._redis_manager = RedisManager(self._settings)
+        return self._redis_manager
+
+    def create_cache(self) -> RedisCacheManager:
+        if not self._cache_manager:
+            self._cache_manager = RedisCacheManager(self.create_redis(), self._settings)
+        return self._cache_manager
+
+
+redis_fabcric = RedisCacheFactory(settings)

@@ -3,7 +3,8 @@ import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import Request
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 
 LOG_DIR = Path('logs')
 LOG_DIR.mkdir(exist_ok=True, parents=True)
@@ -28,12 +29,12 @@ logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
 
-class LoggingMiddleware:
-    """Класс для логирования всех запросов в виде middleware"""
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware для логирования всех HTTP-запросов"""
 
-    async def __call__(self, request: Request, call_next, *args, **kwargs):
+    async def dispatch(self, request: Request, call_next):
         start_time = time.time()
-        response = await call_next(request)
+        response: Response = await call_next(request)
         duration = time.time() - start_time
         logger.info(
             f'Request: {request.method} {request.url} - {duration:.3f} sec; '

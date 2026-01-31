@@ -1,32 +1,32 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_cache.decorator import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db_depends import get_async_session
-from core.redis_utils import calculate_ttl_until, build_cache_key_from_query
+from core.redis_utils import redis_fabcric
 from crud.crud_trade import crud_trade
-from schemas.trading_schema import (ReadTradingSchema,
-                                    TradingDynamicsFilterSchema,
-                                    LastTradesFilterSchema)
 from schemas.filters import PaginationDep
-
+from schemas.trading_schema import (
+    LastTradesFilterSchema,
+    ReadTradingSchema,
+    TradingDynamicsFilterSchema,
+)
 
 router = APIRouter()
 
 
 @router.get(
-    '/trading-results/last-dates',
-    status_code=status.HTTP_200_OK,
-    response_model=list[date]
+    '/trading-results/last-dates', status_code=status.HTTP_200_OK, response_model=list[date]
 )
 @cache(
-    expire=calculate_ttl_until(), namespace='last-dates', key_builder=build_cache_key_from_query
+    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
+    namespace='last-dates',
+    key_builder=redis_fabcric.create_cache().build_key_from_request,
 )
 async def get_last_trading_dates(
-    pagination: PaginationDep,
-    session: AsyncSession = Depends(get_async_session)
+    pagination: PaginationDep, session: AsyncSession = Depends(get_async_session)
 ) -> list[date]:
     """
     Возвращает список последних уникальных дат торгов.
@@ -55,17 +55,17 @@ async def get_last_trading_dates(
 
 
 @router.get(
-        '/trading-results/',
-        status_code=status.HTTP_200_OK,
-        response_model=list[ReadTradingSchema]
+    '/trading-results/', status_code=status.HTTP_200_OK, response_model=list[ReadTradingSchema]
 )
 @cache(
-    expire=calculate_ttl_until(), namespace='dynamics', key_builder=build_cache_key_from_query
+    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
+    namespace='dynamics',
+    key_builder=redis_fabcric.create_cache().build_key_from_request,
 )
 async def get_dynamics(
     pagination: PaginationDep,
     filters: TradingDynamicsFilterSchema = Depends(),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
 ) -> list[ReadTradingSchema]:
     """
     Возвращает список торгов за заданный период с возможностью фильтрации.
@@ -99,12 +99,12 @@ async def get_dynamics(
         filters.start_date,
         filters.end_date,
         pagination.limit,
-        pagination.offset
+        pagination.offset,
     )
     if not trades:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Данные по торгам за заданный период не найдены!'
+            detail='Данные по торгам за заданный период не найдены!',
         )
     return trades
 
@@ -112,17 +112,17 @@ async def get_dynamics(
 @router.get(
     '/trading-results/last-trades',
     status_code=status.HTTP_200_OK,
-    response_model=list[ReadTradingSchema]
+    response_model=list[ReadTradingSchema],
 )
 @cache(
-    expire=calculate_ttl_until(),
+    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
     namespace='trading_results',
-    key_builder=build_cache_key_from_query
+    key_builder=redis_fabcric.create_cache().build_key_from_request,
 )
 async def get_trading_results(
     pagination: PaginationDep,
     filters: LastTradesFilterSchema = Depends(),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
 ) -> list[ReadTradingSchema]:
     """
     Возвращает список последних торгов.
@@ -153,11 +153,10 @@ async def get_trading_results(
         filters.delivery_type_id,
         filters.delivery_basis_id,
         pagination.limit,
-        pagination.offset
+        pagination.offset,
     )
     if not last_trades:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Данные последних торгов не найдены!'
+            status_code=status.HTTP_404_NOT_FOUND, detail='Данные последних торгов не найдены!'
         )
     return last_trades

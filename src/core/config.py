@@ -1,6 +1,7 @@
 import datetime
 from dataclasses import dataclass
 from datetime import time
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,8 +20,7 @@ class URLData:
 
 
 class Config(BaseSettings):
-    APP_TITLE: str
-    APP_DESCRIPTION: str
+    DEBUG: bool
     DB_TYPE: str
     DB_API: str
     POSTGRES_DB: str
@@ -52,5 +52,11 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 
-settings = Config()
+@lru_cache
+def get_settings() -> Config:
+    return Config()  # type: ignore
+
+
+settings = get_settings()
+
 url = URLData()
