@@ -1,11 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Annotated
 
-from core.constants import LengthConstants, PriceConstants
 from sqlalchemy import Date, Numeric, SmallInteger, String, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
+
+small_int = Annotated[int | None, mapped_column(SmallInteger)]
 
 
 class SpamixTradingResults(Base):
@@ -41,28 +43,15 @@ class SpamixTradingResults(Base):
         - Числовые значения total и volume могут быть NULL.
     """
 
-    exchange_product_id: Mapped[str] = mapped_column(
-        String(LengthConstants.EXCHANGE_PRODUCT_ID_LENGTH), nullable=False
-    )
-    exchange_product_name: Mapped[str] = mapped_column(
-        String(LengthConstants.EXCHANGE_PRODUCT_NAME_LENGTH), nullable=False
-    )
-    oil_id: Mapped[str] = mapped_column(String(LengthConstants.OIL_ID_LENGTH), nullable=False)
-    delivery_basis_id: Mapped[str] = mapped_column(
-        String(LengthConstants.DELIVERY_BASIS_ID_LENGTH), nullable=False
-    )
-    delivery_basis_name: Mapped[str] = mapped_column(
-        String(LengthConstants.DELIVERY_BASIS_NAME_LENGTH), nullable=False
-    )
-    delivery_type_id: Mapped[str] = mapped_column(
-        String(LengthConstants.DELIVERY_TYPE_ID_LENGTH), nullable=False
-    )
-    volume: Mapped[int] = mapped_column(SmallInteger, nullable=True)
-    total: Mapped[Decimal] = mapped_column(
-        Numeric(PriceConstants.PRICE_NUMBER_OF_DIGITS, PriceConstants.PRICE_FRACTIONAL_PART),
-        nullable=True,
-    )
-    count: Mapped[int] = mapped_column(SmallInteger, nullable=True)
+    exchange_product_id: Mapped[str] = mapped_column(String(24), nullable=False)
+    exchange_product_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    oil_id: Mapped[str] = mapped_column(String(4), nullable=False)
+    delivery_basis_id: Mapped[str] = mapped_column(String(3), nullable=False)
+    delivery_basis_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    delivery_type_id: Mapped[str] = mapped_column(String(1), nullable=False)
+    volume: Mapped[small_int]
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=True)
+    count: Mapped[small_int]
     date: Mapped[datetime] = mapped_column(Date, nullable=False, index=True)
 
     __table_args__ = (
