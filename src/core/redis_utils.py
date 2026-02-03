@@ -148,6 +148,7 @@ class RedisCacheFactory:
         self._cache_manager: RedisCacheManager | None = None
 
     def create_redis(self) -> RedisManager:
+        print(self._settings)
         if not self._redis_manager:
             self._redis_manager = RedisManager(self._settings)
         return self._redis_manager
