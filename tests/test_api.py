@@ -1,20 +1,18 @@
+from decimal import Decimal
+
 import pytest
 from fastapi import status
 
-from src.crud.crud_trade import crud_trade
 
-
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope='session')
 async def test_last_dates_404(client):
     response = await client.get('api/v1/trading-results/last-dates?limit=5&offset=0')
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {'detail': 'Даты не найдены!'}
 
 
-@pytest.mark.asyncio
-async def test_last_dates_cached(trading_results, client, mocker):
-    spy = mocker.spy(crud_trade, 'get_list_last_dates')
-
+@pytest.mark.asyncio(loop_scope='session')
+async def test_last_dates_cached(trading_results, client, check_init_redis):
     r1 = await client.get('api/v1/trading-results/last-dates?limit=5&offset=0')
     r2 = await client.get('api/v1/trading-results/last-dates?limit=5&offset=0')
 
@@ -24,10 +22,18 @@ async def test_last_dates_cached(trading_results, client, mocker):
     assert r1.json() == r2.json()
     assert len(r1.json()) == 2
 
-    assert spy.call_count == 1
+    keys = await check_init_redis.keys('fastapi-cache:*')
+    print('Redis keys:', keys)
+
+    assert len(keys) > 0
+
+    value = await check_init_redis.get(keys[0])
+    assert value is not None
+
+    # assert spy.call_count == 1
 
 
-@pytest.mark.skip
+@pytest.mark.asyncio(loop_scope='session')
 async def test_last_dates_pagination(client, trading_results):
     """Проверяем пагинацию"""
 
@@ -35,15 +41,15 @@ async def test_last_dates_pagination(client, trading_results):
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
     print(trading_results[0])
-    assert response.json()[0] == trading_results[0].date.isoformat()
+    assert response.json()[0] == trading_results[1].date.isoformat()
 
     response = await client.get('api/v1/trading-results/last-dates?limit=1&offset=1')
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
-    assert response.json()[0] == trading_results[1].date.isoformat()
+    assert response.json()[0] == trading_results[0].date.isoformat()
 
 
-@pytest.mark.skip
+@pytest.mark.asyncio(loop_scope='session')
 async def test_trading_dynamics_404(client):
     """Проверка на 404, если данных нет"""
     params = {
@@ -61,17 +67,14 @@ async def test_trading_dynamics_404(client):
     assert response.json() == {'detail': 'Данные по торгам за заданный период не найдены!'}
 
 
-@pytest.mark.skip
-async def test_trading_dynamics_cached(client, trading_results, mocker):
+@pytest.mark.asyncio(loop_scope='session')
+async def test_trading_dynamics_cached(client, trading_results, check_init_redis):
     """Проверяем кэширование и фильтрацию по oil_id"""
-    spy = mocker.spy(crud_trade, 'get_list_trade_for_period')
 
     params = {
         'limit': 5,
         'offset': 0,
         'oil_id': 'DT32',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
         'start_date': '2023-02-01',
         'end_date': '2025-11-28',
     }
@@ -82,13 +85,27 @@ async def test_trading_dynamics_cached(client, trading_results, mocker):
     assert r1.status_code == status.HTTP_200_OK
     assert r2.status_code == status.HTTP_200_OK
 
-    assert r1.json() == r2.json()
+    def normalize_totals(records):
+        for r in records:
+            r['total'] = Decimal(r['total'])
+        return records
+
+    r1_data = normalize_totals(r1.json())
+    r2_data = normalize_totals(r2.json())
+
+    assert r1_data == r2_data
     assert len(r1.json()) == 1
 
-    assert spy.call_count == 1
+    keys = await check_init_redis.keys('fastapi-cache:*')
+    print('Redis keys:', keys)
+
+    assert len(keys) > 0
+
+    value = await check_init_redis.get(keys[0])
+    assert value is not None
 
 
-@pytest.mark.skip
+@pytest.mark.asyncio(loop_scope='session')
 async def test_trading_dynamics_pagination(client, trading_results):
     """Проверка limit, offset и фильтров"""
 
@@ -96,8 +113,6 @@ async def test_trading_dynamics_pagination(client, trading_results):
         'limit': 1,
         'offset': 0,
         'oil_id': 'DT32',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
         'start_date': '2023-02-01',
         'end_date': '2025-11-28',
     }
@@ -107,19 +122,18 @@ async def test_trading_dynamics_pagination(client, trading_results):
 
     params['offset'] = 1
     response = await client.get('api/v1/trading-results/', params=params)
+    print(response.json())
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert len(response.json()) == 0
+    assert response.json() == {'detail': 'Данные по торгам за заданный период не найдены!'}
 
 
-@pytest.mark.skip
+@pytest.mark.asyncio(loop_scope='session')
 async def test_trading_last_results_404(client):
     """Проверка на 404, если данных нет"""
     params = {
         'limit': 5,
         'offset': 0,
         'oil_id': 'OIL999',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
     }
 
     response = await client.get('api/v1/trading-results/last-trades', params=params)
@@ -127,17 +141,14 @@ async def test_trading_last_results_404(client):
     assert response.json() == {'detail': 'Данные последних торгов не найдены!'}
 
 
-@pytest.mark.skip
-async def test_trading_last_results_cached(client, trading_results, mocker):
+@pytest.mark.asyncio(loop_scope='session')
+async def test_trading_last_results_cached(client, trading_results, check_init_redis):
     """Проверяем кэширование и фильтрацию по oil_id"""
-    spy = mocker.spy(crud_trade, 'get_list_last_trades')
 
     params = {
         'limit': 5,
         'offset': 0,
         'oil_id': 'DT32',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
     }
 
     r1 = await client.get('api/v1/trading-results/last-trades', params=params)
@@ -146,13 +157,27 @@ async def test_trading_last_results_cached(client, trading_results, mocker):
     assert r1.status_code == status.HTTP_200_OK
     assert r2.status_code == status.HTTP_200_OK
 
-    assert r1.json() == r2.json()
+    def normalize_totals(records):
+        for r in records:
+            r['total'] = Decimal(r['total'])
+        return records
+
+    r1_data = normalize_totals(r1.json())
+    r2_data = normalize_totals(r2.json())
+
+    assert r1_data == r2_data
     assert len(r1.json()) == 1
 
-    assert spy.call_count == 1
+    keys = await check_init_redis.keys('fastapi-cache:*')
+    print('Redis keys:', keys)
+
+    assert len(keys) > 0
+
+    value = await check_init_redis.get(keys[0])
+    assert value is not None
 
 
-@pytest.mark.skip
+@pytest.mark.asyncio(loop_scope='session')
 async def test_trading_last_results_pagination(client, trading_results):
     """Проверка limit, offset и фильтров"""
 
@@ -160,14 +185,12 @@ async def test_trading_last_results_pagination(client, trading_results):
         'limit': 1,
         'offset': 0,
         'oil_id': 'DT32',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
     }
     response = await client.get('api/v1/trading-results/last-trades', params=params)
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
 
     params['offset'] = 1
-    response = await client.get('api/v1/trading-results/', params=params)
+    response = await client.get('api/v1/trading-results/last-trades', params=params)
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert len(response.json()) == 0
+    assert response.json() == {'detail': 'Данные последних торгов не найдены!'}

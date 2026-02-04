@@ -5,7 +5,7 @@ from fastapi_cache.decorator import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db_depends import get_async_session
-from core.redis_utils import redis_fabcric
+from core.redis_utils import redis_cache
 from crud.crud_trade import crud_trade
 from schemas.filters import PaginationDep
 from schemas.trading_schema import (
@@ -21,9 +21,9 @@ router = APIRouter()
     '/trading-results/last-dates', status_code=status.HTTP_200_OK, response_model=list[date]
 )
 @cache(
-    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
+    expire=redis_cache.calculate_ttl_until_reset(),
     namespace='last-dates',
-    key_builder=redis_fabcric.create_cache().build_key_from_request,
+    key_builder=redis_cache.build_key_from_request,
 )
 async def get_last_trading_dates(
     pagination: PaginationDep, session: AsyncSession = Depends(get_async_session)
@@ -58,9 +58,9 @@ async def get_last_trading_dates(
     '/trading-results/', status_code=status.HTTP_200_OK, response_model=list[ReadTradingSchema]
 )
 @cache(
-    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
+    expire=redis_cache.calculate_ttl_until_reset(),
     namespace='dynamics',
-    key_builder=redis_fabcric.create_cache().build_key_from_request,
+    key_builder=redis_cache.build_key_from_request,
 )
 async def get_dynamics(
     pagination: PaginationDep,
@@ -115,9 +115,9 @@ async def get_dynamics(
     response_model=list[ReadTradingSchema],
 )
 @cache(
-    expire=redis_fabcric.create_cache().calculate_ttl_until_reset(),
-    namespace='trading_results',
-    key_builder=redis_fabcric.create_cache().build_key_from_request,
+    expire=redis_cache.calculate_ttl_until_reset(),
+    namespace='trading-results',
+    key_builder=redis_cache.build_key_from_request,
 )
 async def get_trading_results(
     pagination: PaginationDep,

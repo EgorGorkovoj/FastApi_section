@@ -31,7 +31,7 @@ class RedisManager:
             host=self._settings.REDIS_HOST,
             port=self._settings.REDIS_PORT,
             db=0,
-            decode_responses=True,
+            # decode_responses=True,
         )
 
         try:
@@ -52,14 +52,21 @@ class RedisManager:
             self._client = None
 
 
+redis_manager = RedisManager(settings=settings)
+
+
+async def get_redis(redis_manager: RedisManager) -> redis.Redis:
+    return await redis_manager.connect()
+
+
 class RedisCacheManager:
-    def __init__(self, redis: RedisManager, settings: Config):
-        self._redis = redis
+    def __init__(self, redis_manager: RedisManager, settings: Config):
+        self._redis_manager = redis_manager
         self._settings = settings
 
-    async def init_cache(self) -> None:
+    async def init_fastapi_cache(self) -> None:
         try:
-            redis_client = await self._redis.connect()
+            redis_client = await self._redis_manager.connect()
             FastAPICache.init(
                 RedisBackend(redis_client),
                 prefix='fastapi-cache',
@@ -122,41 +129,9 @@ class RedisCacheManager:
         return f'{prefix}:{namespace}:{query_str}'
 
 
-class RedisFabric:
-    def __init__(self, settings: Config):
-        self._settings = settings
-
-    def create_redis(self) -> RedisManager:
-        return RedisManager(self._settings)
+def redis_fastapi_cache(settings: Config, redis_manager: RedisManager) -> RedisCacheManager:
+    cache_manager = RedisCacheManager(redis_manager=redis_manager, settings=settings)
+    return cache_manager
 
 
-class CacheFabric:
-    def __init__(self, settings: Config, redis_manager: RedisManager):
-        self._settings = settings
-        self._redis_manager = redis_manager
-
-    def create_redis_cache(self) -> RedisCacheManager:
-        return RedisCacheManager(self._redis_manager, self._settings)
-
-
-class RedisCacheFactory:
-    """Создаёт RedisManager и RedisCacheManager для приложения."""
-
-    def __init__(self, settings: Config):
-        self._settings = settings
-        self._redis_manager: RedisManager | None = None
-        self._cache_manager: RedisCacheManager | None = None
-
-    def create_redis(self) -> RedisManager:
-        print(self._settings)
-        if not self._redis_manager:
-            self._redis_manager = RedisManager(self._settings)
-        return self._redis_manager
-
-    def create_cache(self) -> RedisCacheManager:
-        if not self._cache_manager:
-            self._cache_manager = RedisCacheManager(self.create_redis(), self._settings)
-        return self._cache_manager
-
-
-redis_fabcric = RedisCacheFactory(settings)
+redis_cache = redis_fastapi_cache(settings=settings, redis_manager=redis_manager)
