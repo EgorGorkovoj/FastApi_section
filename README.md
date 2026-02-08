@@ -33,35 +33,8 @@ FastAPI приложение для парсинга бюллетеней Сан
 - Redis (для кэширования)
 - pip / venv
 
----
 
-# 🚀 Установка и запуск
-
-## 1. Создать виртуальное окружение
-
-```bash
-python -m venv venv
-```
-
-### Активировать:
-- Windows
-```bash
-source venv\Scripts\activate
-```
-- Linux / macOS
-```bash
-source venv/bin/activate
-```
-
-## 2. Установка зависимостей
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
----
-
-# Поднятие контейнера приложения, БД PostgreSQL и REDIS в Docker
+# 🚀 Поднятие контейнера приложения, БД PostgreSQL и REDIS в Docker
 
 ## 1. Создать файл .env в корне проекта.
 
@@ -72,21 +45,18 @@ pip install -r requirements.txt
 docker compose -f docker-compose.yml up -d
 ```
 
-## 3. После этого выполнить и применить миграции Alembic в контейнере
-```bash
-alembic revision --autogenerate -m "Initial commit"
-alembic upgrade head
-```
+# Запуск тестов
+## 1. Создать файл .test.env в корне проекта.
 
----
-# Запуск проекта локально (без Docker)
+Пример содержания файла .env находится в корне проекта в файле .env.example.
+Нужны настройки только для PostgreSQl и Redis.
 
-Основной вход — main.py:
+## 2. Из корневой директории проекта выполнить команду:
 ```bash
-cd src
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+pytest
 ```
----
+В фикстурах уже прописана команда для поднятия тестовых БД и очистки.
+
 # Логирование
 
 Все события пишутся в:
