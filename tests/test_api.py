@@ -23,14 +23,10 @@ async def test_last_dates_cached(trading_results, client, check_init_redis):
     assert len(r1.json()) == 2
 
     keys = await check_init_redis.keys('fastapi-cache:*')
-    print('Redis keys:', keys)
-
     assert len(keys) > 0
 
     value = await check_init_redis.get(keys[0])
     assert value is not None
-
-    # assert spy.call_count == 1
 
 
 @pytest.mark.asyncio(loop_scope='session')
@@ -40,7 +36,6 @@ async def test_last_dates_pagination(client, trading_results):
     response = await client.get('api/v1/trading-results/last-dates?limit=1&offset=0')
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
-    print(trading_results[0])
     assert response.json()[0] == trading_results[1].date.isoformat()
 
     response = await client.get('api/v1/trading-results/last-dates?limit=1&offset=1')
@@ -56,8 +51,6 @@ async def test_trading_dynamics_404(client):
         'limit': 5,
         'offset': 0,
         'oil_id': 'OIL999',
-        'delivery_type_id': None,
-        'delivery_basis_id': None,
         'start_date': '2024-01-01',
         'end_date': '2024-01-31',
     }
@@ -97,7 +90,6 @@ async def test_trading_dynamics_cached(client, trading_results, check_init_redis
     assert len(r1.json()) == 1
 
     keys = await check_init_redis.keys('fastapi-cache:*')
-    print('Redis keys:', keys)
 
     assert len(keys) > 0
 
@@ -122,7 +114,6 @@ async def test_trading_dynamics_pagination(client, trading_results):
 
     params['offset'] = 1
     response = await client.get('api/v1/trading-results/', params=params)
-    print(response.json())
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {'detail': 'Данные по торгам за заданный период не найдены!'}
 
@@ -169,8 +160,6 @@ async def test_trading_last_results_cached(client, trading_results, check_init_r
     assert len(r1.json()) == 1
 
     keys = await check_init_redis.keys('fastapi-cache:*')
-    print('Redis keys:', keys)
-
     assert len(keys) > 0
 
     value = await check_init_redis.get(keys[0])

@@ -13,7 +13,6 @@ from services.check_data_parser import check_last_date_parser_spmx
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await redis_cache.init_fastapi_cache()
-    print(settings.DEBUG)
 
     if settings.RUN_PARSER_ON_STARTUP:
         asyncio.create_task(check_last_date_parser_spmx())
