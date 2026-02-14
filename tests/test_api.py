@@ -10,6 +10,14 @@ from httpx import AsyncClient
 async def test_last_dates_in_db(
     client: AsyncClient, override_redis: AsyncMock, override_session: AsyncMock
 ):
+    """
+    Проверяет получение последних дат из БД при отсутствии кэша.
+
+    Ожидается:
+    - данные запрашиваются через CRUD,
+    - результат сериализуется,
+    - данные сохраняются в Redis.
+    """
     fake_dates = [date(2024, 1, 1), date(2024, 1, 2)]
 
     with patch(
@@ -25,6 +33,10 @@ async def test_last_dates_in_db(
 
 @pytest.mark.asyncio
 async def test_last_dates_from_cache(client: AsyncClient, override_redis: AsyncMock):
+    """
+    Проверяет возврат последних дат из Redis.
+    CRUD не должен вызываться, данные берутся из кеша.
+    """
     override_redis.get.return_value = '["2024-01-01"]'
 
     response = await client.get('/api/v1/trading-results/last-dates?limit=1&offset=0')
@@ -49,6 +61,10 @@ async def test_last_dates_pagination(
     override_redis: AsyncMock,
     override_session: AsyncMock,
 ):
+    """
+    Проверяет корректность пагинации для списка последних дат.
+    Убеждаемся, что limit и offset корректно передаются в CRUD.
+    """
     all_dates = [
         date(2024, 1, 1),
         date(2024, 1, 2),
@@ -76,6 +92,10 @@ async def test_last_dates_pagination(
 async def test_dynamics_trades_in_db(
     client: AsyncClient, override_redis: AsyncMock, override_session: AsyncMock, fake_trade: type
 ):
+    """
+    Проверяет получение динамики торгов из БД при отсутствии кеша.
+    Ожидается вызов CRUD и сохранение результата в Redis.
+    """
     trade = fake_trade(1)
     fake_trades = [trade.to_dict()]
 
@@ -104,6 +124,10 @@ async def test_dynamics_trades_in_db(
 async def test_dynamics_trades_from_cache(
     client: AsyncClient, override_redis: AsyncMock, fake_trade: type
 ):
+    """
+    Проверяет возврат динамики торгов из Redis.
+    БД не должна вызываться.
+    """
     trade = fake_trade(1)
     fake_data = [trade.to_dict()]
 
@@ -140,6 +164,10 @@ async def test_get_dynamics_pagination(
     override_session: AsyncMock,
     fake_trade: type,
 ):
+    """
+    Проверяет корректную работу пагинации для динамики торгов.
+    Параметры limit и offset должны корректно передаваться в CRUD.
+    """
     all_trades = [fake_trade(i) for i in range(3)]
 
     async def fake_get_list_trade_for_period(
@@ -181,6 +209,10 @@ async def test_get_dynamics_pagination(
 async def test_last_trades_from_db(
     client: AsyncClient, override_redis: AsyncMock, override_session: AsyncMock, fake_trade: type
 ):
+    """
+    Проверяет получение последних торгов из БД при отсутствии кэша.
+    Результат должен быть сохранён в Redis.
+    """
     trade = fake_trade(1)
     fake_trades = [trade.to_dict()]
 
@@ -201,6 +233,9 @@ async def test_last_trades_from_db(
 async def test_last_trades_from_cache(
     client: AsyncClient, override_redis: AsyncMock, fake_trade: type
 ):
+    """
+    Проверяет возврат последних торгов из кеша при cache hit.
+    """
     trade = fake_trade(1)
     fake_data = [trade.to_dict()]
 
@@ -233,6 +268,10 @@ async def test_last_trades_pagination(
     override_session: AsyncMock,
     fake_trade: type,
 ):
+    """
+    Проверяет корректность пагинации для последних торгов.
+    Убеждаемся в правильной передаче limit и offset в CRUD.
+    """
     all_trades = [fake_trade(i) for i in range(3)]
 
     async def fake_get_list_trade_for_period(
