@@ -1,158 +1,111 @@
-import asyncio
-import subprocess
-import time
+"""
+Тестовые фикстуры для API trading-results.
+
+Используется dependency_overrides FastAPI для:
+- подмены Redis
+- подмены AsyncSession
+- изоляции от реальной БД и Redis
+
+Фикстуры:
+- app_test — тестовое приложение
+- client — httpx AsyncClient с ASGITransport
+- fake_redis — мок Redis-клиента
+- session_mock — мок AsyncSession
+- override_redis — подмена зависимости get_redis
+- override_session — подмена зависимости get_async_session
+- fake_trade — фабрика фейковых trade-объектов
+"""
+
 from datetime import date
 from decimal import Decimal
+from typing import AsyncGenerator, Generator
+from unittest.mock import AsyncMock
 
-import asyncpg
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
 
-from src.core.config import Config, settings
-from src.core.db_depends import get_async_session
-from src.core.logger import logger
-from src.core.redis_utils import get_redis, redis_cache, redis_manager
+from src.api.v1.endpoints.trading import get_async_session, get_redis
 from src.main import app as prod_app
-from src.models.base import Base
-from src.models.trading_results import SpamixTradingResults
-
-
-@pytest_asyncio.fixture(scope='session', autouse=True)
-async def setup_test_db():
-    """
-    Фикстура для автоматического запуска и удаления контейнера с тестовой базой данных.
-
-    - Перед тестами запускает контейнер PostgreSQL с помощью `docker compose`.
-    - Ожидает готовности базы перед выполнением тестов.
-    - После тестов останавливает и удаляет контейнер с тестовой БД.
-    """
-    try:
-        subprocess.run(
-            [
-                'docker',
-                'compose',
-                '--env-file',
-                '.test.env',
-                '-f',
-                'docker-compose.test.yml',
-                'up',
-                '-d',
-            ],
-            check=True,
-        )
-        await wait_for_postgres_async(settings=settings)
-        yield
-    finally:
-        subprocess.run(
-            ['docker', 'compose', '-f', 'docker-compose.test.yml', 'down', '-v'],
-            check=True,
-        )
-
-
-async def wait_for_postgres_async(settings: Config, timeout: int = 60):
-    """Асинхронно ждём готовности PostgreSQL."""
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        try:
-            conn = await asyncpg.connect(
-                host=settings.POSTGRES_HOST,
-                port=settings.POSTGRES_PORT,
-                user=settings.POSTGRES_USER,
-                password=settings.POSTGRES_PASSWORD,
-                database=settings.POSTGRES_DB,
-            )
-            await conn.close()
-            logger.info('PostgreSQL готов к работе')
-            return
-        except (OSError, asyncpg.PostgresError):
-            logger.info('Ожидание PostgreSQL...')
-            await asyncio.sleep(1)
-    raise TimeoutError('PostgreSQL не запустился за отведённое время!')
-
-
-@pytest_asyncio.fixture(scope='session')
-async def test_engine():
-    engine = create_async_engine(
-        settings.database_url, echo=False, future=True, poolclass=NullPool
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    try:
-        yield engine
-    finally:
-        await engine.dispose()
-
-
-@pytest_asyncio.fixture(scope='session')
-async def async_sessionmaker(test_engine):
-    return sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
-
-
-@pytest_asyncio.fixture(scope='session')
-async def app_test(async_sessionmaker):
-    async def _get_db():
-        async with async_sessionmaker() as session:
-            try:
-                yield session
-            finally:
-                await session.rollback()
-
-    prod_app.dependency_overrides[get_async_session] = _get_db
-    yield prod_app
-    prod_app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture(scope='session')
-async def check_init_redis():
-    redic = await get_redis(redis_manager=redis_manager)
-    await redis_cache.init_fastapi_cache()
-    yield redic
-    await redic.flushdb()
 
 
 @pytest_asyncio.fixture
-async def client(app_test: FastAPI, check_init_redis):
-    transport = ASGITransport(app=app_test)
-    async with AsyncClient(transport=transport, base_url='http://testserver') as c:
-        yield c
+async def app_test() -> FastAPI:
+    return prod_app
 
 
-@pytest_asyncio.fixture(scope='session')
-async def trading_results(async_sessionmaker):
-    rows = [
-        SpamixTradingResults(
-            exchange_product_id='DT32KOB065F',
-            exchange_product_name='ДТ (ДТ-З-К5) минус 32, ст. Комбинатская (ст. отправления)',
-            oil_id='DT32',
-            delivery_basis_id='KOB',
-            delivery_basis_name='ст. Комбинатская',
-            delivery_type_id='F',
-            volume=3120,
-            total=Decimal('142696450.00'),
-            count=13,
-            date=date(2023, 2, 1),
-        ),
-        SpamixTradingResults(
-            exchange_product_id='A106PDK060J',
-            exchange_product_name=(
-                'Бензин (АИ-100-К5) EURO-6, Предкомбинатская-группа станций (ст. отправления ОТП)'
-            ),
-            oil_id='A106',
-            delivery_basis_id='PDK',
-            delivery_basis_name='Предкомбинатская-группа станций',
-            delivery_type_id='J',
-            volume=60,
-            total=Decimal('5514420.00'),
-            count=1,
-            date=date(2025, 11, 28),
-        ),
-    ]
-    async with async_sessionmaker() as test_session:
-        test_session.add_all(rows)
-        await test_session.commit()
-        return rows
+@pytest_asyncio.fixture
+async def client(app_test: FastAPI) -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(
+        transport=ASGITransport(app=app_test),
+        base_url='http://testserver',
+    ) as client:
+        yield client
+
+
+@pytest.fixture
+def fake_redis() -> AsyncMock:
+    cache = AsyncMock()
+    cache.get.return_value = None
+    cache.set.return_value = None
+    return cache
+
+
+@pytest.fixture
+def session_mock() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture
+def override_redis(app_test: FastAPI, fake_redis: AsyncMock) -> Generator[AsyncMock, None, None]:
+    async def _override():
+        return fake_redis
+
+    app_test.dependency_overrides[get_redis] = _override
+    yield fake_redis
+    app_test.dependency_overrides.pop(get_redis, None)
+
+
+@pytest.fixture
+def override_session(
+    app_test: FastAPI, session_mock: AsyncMock
+) -> Generator[AsyncMock, None, None]:
+    async def _override():
+        yield session_mock
+
+    app_test.dependency_overrides[get_async_session] = _override
+    yield session_mock
+    app_test.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest_asyncio.fixture
+async def fake_trade() -> type:
+    class FakeTrade:
+        def __init__(self, i):
+            self.oil_id = f'A{i}'
+            self.exchange_product_id = f'EP{i}'
+            self.exchange_product_name = f'Product {i}'
+            self.delivery_basis_id = f'B{i}'
+            self.delivery_basis_name = f'Basis {i}'
+            self.delivery_type_id = f'D{i}'
+            self.volume = 100 + i
+            self.total = Decimal(f'{1000 + i}.50')
+            self.count = i
+            self.date = date(2024, 1, i + 1)
+
+        def to_dict(self):
+            return {
+                'oil_id': self.oil_id,
+                'exchange_product_id': self.exchange_product_id,
+                'exchange_product_name': self.exchange_product_name,
+                'delivery_basis_id': self.delivery_basis_id,
+                'delivery_basis_name': self.delivery_basis_name,
+                'delivery_type_id': self.delivery_type_id,
+                'volume': self.volume,
+                'total': str(self.total),
+                'count': self.count,
+                'date': self.date.isoformat(),
+            }
+
+    return FakeTrade
